@@ -1,21 +1,21 @@
 # Eleitos Foto
 
-Sistema para download e processamento de imagens de candidatos eleitos do TSE com melhorias usando IA.
+Ferramenta para coleta e processamento de fotos de candidatos eleitos.
 
-## Pré-requisitos
+## Requisitos
 
-### 1. Python
-- Faça download do Python em [python.org](https://www.python.org/downloads/)
-- Durante a instalação, marque a opção "Add Python to PATH"
-- Verifique a instalação abrindo o terminal e digitando:
-```bash
-python --version
-```
+- Python 3.8 ou superior
+- pip (gerenciador de pacotes Python)
 
-### 2. Bibliotecas Python
-Abra o terminal e instale as bibliotecas necessárias:
+## Instalação
+
+1. Clone este repositório
+2. Instale as dependências necessárias:
+
 ```bash
 pip install requests
+pip install Pillow
+pip install svgwrite
 ```
 
 ### 3. Conta PicWish
@@ -26,42 +26,48 @@ pip install requests
 
 ## Configuração
 
-1. Clone ou baixe este repositório
-2. Copie o arquivo `config.template.json` para `config.json`
-3. Abra `config.json` e substitua "your_api_key_here" pela sua API Key do PicWish
+1. Copie o arquivo `config.template.json` para `config.json`
+2. Edite o arquivo `config.json` e adicione sua API key do PicWish
+
+```json
+{
+    "picwish_api_key": "sua_api_key_aqui"
+}
+```
+
+## Funcionalidades
+
+- Download de fotos de candidatos eleitos do TSE
+- Processamento opcional de imagens com IA (PicWish)
+- Geração de tarjetas com informações dos candidatos
+- Exportação para formatos CSV, JSON e SVG
 
 ## Uso
 
-1. Abra o terminal na pasta do projeto
-2. Execute o programa:
+Execute o script principal:
+
 ```bash
 python eleitos_download.py
 ```
-3. Siga as instruções na tela para informar:
-   - Ano da eleição
-   - Tipo (municipal/federal)
-   - Região
-   - UF
-   - Município
-   - Configurações de processamento de imagem
 
-## Estrutura de Arquivos Gerada
+O programa irá solicitar:
+- Informações da eleição (ano, tipo, região, UF, município)
+- Opções de processamento de imagem (IA, remoção de fundo, formato 3x4)
+- Opção para geração de tarjetas
+
+## Estrutura de Diretórios
 
 ```
-EleitosFoto/
-└── DADOS/
-    └── REGIAO/          # Ex: SUL
-        └── UF/          # Ex: SC
-            └── MUNICIPIO/   # Ex: SOMBRIO
-                ├── candidatos_eleitos_UF_MUNICIPIO.csv
-                ├── candidatos_eleitos_UF_MUNICIPIO.json
-                ├── imagens/
-                │   ├── Prefeito/
-                │   ├── Vice-prefeito/
-                │   └── Vereador/
-                └── imagens_processadas/
-                    ├── Prefeito/
-                    ├── Vice-prefeito/
+DADOS/
+├── [REGIÃO]/
+│   ├── [UF]/
+│   │   ├── [MUNICÍPIO]/
+│   │   │   ├── imagens/
+│   │   │   ├── imagens_processadas/
+│   │   │   ├── tarjetas/
+│   │   │   ├── candidatos_eleitos_[UF]_[MUNICÍPIO].csv
+│   │   │   └── candidatos_eleitos_[UF]_[MUNICÍPIO].json
+```
                     └── Vereador/
 ```
 

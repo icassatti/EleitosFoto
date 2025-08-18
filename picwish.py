@@ -16,6 +16,8 @@ class PicWishProcessor:
         if api_key is None:
             config = carregar_config()
             api_key = config.get('picwish_api_key')
+        # Add debug print    
+        print(f"\nInicializando PicWishProcessor com API Key: {api_key}")
         self.api_key = api_key
         
     def download_image(self, url, save_path):
@@ -33,6 +35,11 @@ class PicWishProcessor:
 
     def process_image_with_picwish(self, image_url):
         """Processa a imagem usando a API PicWish"""
+        if not self.api_key:
+            print("\nERRO: API Key não configurada!")
+            print("Configure uma API Key válida no arquivo config.json")
+            return None
+
         headers = {'X-API-KEY': self.api_key}
         data = {'sync': '0', 'image_url': image_url}
         url = 'https://techhk.aoscdn.com/api/tasks/visual/scale'
@@ -44,11 +51,12 @@ class PicWishProcessor:
             print(f"Status da requisição: {response.status_code}")
             
             if response.status_code == 401:
-                print("\nERRO: API Key inválida!")
-                print("1. Abra o arquivo config.json")
-                print("2. Atualize o valor da chave 'picwish_api_key' com uma API key válida")
-                print("3. Execute o programa novamente")
-                exit(1)
+                print("\nERRO: API Key inválida ou expirada!")
+                print("1. Acesse https://picwish.com/my-account?subRoute=api-key")
+                print("2. Copie sua API key válida")
+                print("3. Atualize o arquivo config.json")
+                print("4. Execute o programa novamente")
+                return None
                 
             print(f"Resposta completa: {response_json}")
             
@@ -312,6 +320,33 @@ class PicWishProcessor:
                 remove_background=remove_background,
                 make_id_photo=make_id_photo
             )
+            results.append({
+                'nome': candidate['Nome de Urna'],
+                'cargo': candidate['Cargo'],
+                'sucesso': success
+            })
+        return results
+
+    def download_candidates_list(self, candidates_data, base_dir):
+        """Apenas baixa as imagens originais dos candidatos"""
+        results = []
+        for candidate in candidates_data:
+            nome = candidate['Nome de Urna'].replace(' ', '_')
+            cargo = candidate['Cargo']
+            url_original = candidate['Imagem Oficial']
+            
+            # Criar estrutura de pastas
+            images_dir = os.path.join(base_dir, 'imagens')
+            cargo_dir = os.path.join(images_dir, cargo)
+            os.makedirs(cargo_dir, exist_ok=True)
+            
+            # Baixar imagem original
+            original_path = os.path.join(cargo_dir, f"{nome}.jpg")
+            success = self.download_image(url_original, original_path)
+            
+            if success:
+                print(f"Imagem de {nome} salva em: {original_path}")
+            
             results.append({
                 'nome': candidate['Nome de Urna'],
                 'cargo': candidate['Cargo'],

@@ -3,6 +3,7 @@ import csv
 import json
 import os
 from picwish import PicWishProcessor
+from geradortarget import process_candidates
 
 # Códigos dos cargos
 CARGOS = {
@@ -174,28 +175,37 @@ def obter_parametros():
     municipio = input("Nome do Município: ").strip()
     
     print("\n=== Configuração do Processamento de Imagens ===")
-    api_key = config.get('picwish_api_key')
+    usar_ia = input("Deseja melhorar as fotos com IA? (s/N): ").strip().lower() == 's'
     
-    scale_iter = input("Número de iterações de melhoria (Enter para 1): ").strip()
-    scale_iter = int(scale_iter) if scale_iter.isdigit() else 1
-    
-    remove_bg = input("Remover fundo? (s/N): ").strip().lower()
-    remove_bg = remove_bg == 's'
-    
-    make_3x4 = input("Processar para 3x4? (s/N): ").strip().lower()
-    make_3x4 = make_3x4 == 's'
-    
-    return {
+    params = {
         'ano': ano,
         'tipo': tipo,
         'regiao': regiao,
         'uf': uf,
         'municipio': municipio,
-        'api_key': api_key,
-        'scale_iterations': scale_iter,
-        'remove_background': remove_bg,
-        'make_id_photo': make_3x4
+        'usar_ia': usar_ia,
+        'api_key': None,
+        'scale_iterations': 0,
+        'remove_background': False,
+        'make_id_photo': False
     }
+    
+    if usar_ia:
+        params['api_key'] = config.get('picwish_api_key')
+        scale_iter = input("Número de iterações de melhoria (Enter para 1): ").strip()
+        params['scale_iterations'] = int(scale_iter) if scale_iter.isdigit() else 1
+        
+        remove_bg = input("Remover fundo? (s/N): ").strip().lower()
+        params['remove_background'] = remove_bg == 's'
+        
+        make_3x4 = input("Processar para 3x4? (s/N): ").strip().lower()
+        params['make_id_photo'] = make_3x4 == 's'
+    
+    print("\n=== Configuração de Tarjetas ===")
+    gerar_tarjetas = input("Deseja gerar tarjetas? (s/N): ").strip().lower() == 's'
+    params['gerar_tarjetas'] = gerar_tarjetas
+    
+    return params
 
 # === Fluxo principal com variáveis fixas ===
 if __name__ == "__main__":
@@ -218,20 +228,27 @@ if __name__ == "__main__":
                     caminho_base = criar_estrutura_diretorios(params['regiao'], params['uf'], params['municipio'])
                     exportar_para_csv_json(todos_eleitos, params['uf'], params['municipio'], params['regiao'])
                     
-                    # Processar imagens com PicWish
+                    # Processar imagens
                     processor = PicWishProcessor(api_key=params['api_key'])
-                    resultados = processor.process_candidates_list(
-                        todos_eleitos,
-                        caminho_base,
-                        scale_iterations=params['scale_iterations'],
-                        remove_background=params['remove_background'],
-                        make_id_photo=params['make_id_photo']
-                    )
+                    if params['usar_ia']:
+                        resultados = processor.process_candidates_list(
+                            todos_eleitos,
+                            caminho_base,
+                            scale_iterations=params['scale_iterations'],
+                            remove_background=params['remove_background'],
+                            make_id_photo=params['make_id_photo']
+                        )
+                    else:
+                        resultados = processor.download_candidates_list(todos_eleitos, caminho_base)
                     
                     # Mostrar resultados do processamento
                     for resultado in resultados:
                         status = "sucesso" if resultado['sucesso'] else "falha"
-                        print(f"Processamento de {resultado['nome']} ({resultado['cargo']}): {status}")
+                        print(f"{'Processamento' if params['usar_ia'] else 'Download'} de {resultado['nome']} ({resultado['cargo']}): {status}")
+                    
+                    # Gerar tarjetas se solicitado
+                    if params['gerar_tarjetas']:
+                        process_candidates(todos_eleitos, True)
                 else:
                     print("Nenhum candidato eleito encontrado.")
             else:
