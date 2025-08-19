@@ -6,10 +6,13 @@ from io import BytesIO
 import svgwrite
 from svgwrite import cm, mm
 from corelmanager import CorelDrawManager
+from log_config import setup_logger
 
 class TarjetaGenerator:
     def __init__(self, output_dir="tarjetas"):
         self.output_dir = output_dir
+        self.logger = setup_logger('TarjetaGenerator', os.path.join(os.path.dirname(__file__), 'tarjeta_generator.log'))
+        self.logger.info("Iniciando TarjetaGenerator")
         self.largura = 600
         self.altura = 400
         self.font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -24,6 +27,7 @@ class TarjetaGenerator:
         
     def gerar_tarjeta(self, candidato):
         """Gera uma tarjeta individual"""
+        self.logger.info(f"Gerando tarjeta para candidato: {candidato.get('Nome de Urna')}")
         nome_arquivo = f"{candidato.get('Nome de Urna')}_{candidato.get('Código do Município')}"
         
         # Gerar versão PNG
@@ -37,38 +41,44 @@ class TarjetaGenerator:
         return png_path, svg_path
 
     def _gerar_tarjeta_png(self, candidato, output_path):
-        """Gera versão PNG da tarjeta"""
-        tarjeta = Image.new("RGB", (self.largura, self.altura), "white")
-        draw = ImageDraw.Draw(tarjeta)
-
-        # Download and paste candidate image
-        imagem_url = candidato.get("Imagem Oficial")
         try:
-            response = requests.get(imagem_url)
-            foto = Image.open(BytesIO(response.content)).convert("RGB")
-            foto = foto.resize((200, 200))
-            tarjeta.paste(foto, ((self.largura - 200) // 2, 20))
+            self.logger.info(f"Gerando PNG para {candidato.get('Nome de Urna')}")
+            """Gera versão PNG da tarjeta"""
+            tarjeta = Image.new("RGB", (self.largura, self.altura), "white")
+            draw = ImageDraw.Draw(tarjeta)
+
+            # Download and paste candidate image
+            imagem_url = candidato.get("Imagem Oficial")
+            try:
+                response = requests.get(imagem_url)
+                foto = Image.open(BytesIO(response.content)).convert("RGB")
+                foto = foto.resize((200, 200))
+                tarjeta.paste(foto, ((self.largura - 200) // 2, 20))
+            except Exception as e:
+                self.logger.warning(f"Erro ao baixar imagem de {candidato.get('Nome Completo')}: {e}")
+
+            # Prepare text lines
+            texto = [
+                f"Nome: {candidato.get('Nome Completo')}",
+                f"Urna: {candidato.get('Nome de Urna')}",
+                f"Número: {candidato.get('Número na Urna')}",
+                f"Partido: {candidato.get('Partido')}",
+                f"Cargo: {candidato.get('Cargo')}",
+                f"Reeleição: {candidato.get('Reeleição')}",
+                f"Cidade/UF: {candidato.get('Código do Município')}"
+            ]
+
+            # Draw text below the image
+            y_text = 240
+            for line in texto:
+                draw.text((30, y_text), line, font=self.font, fill="black")
+                y_text += 30
+
+            tarjeta.save(output_path)
+            self.logger.info(f"PNG gerado com sucesso: {output_path}")
         except Exception as e:
-            print(f"Erro ao baixar imagem de {candidato.get('Nome Completo')}: {e}")
-
-        # Prepare text lines
-        texto = [
-            f"Nome: {candidato.get('Nome Completo')}",
-            f"Urna: {candidato.get('Nome de Urna')}",
-            f"Número: {candidato.get('Número na Urna')}",
-            f"Partido: {candidato.get('Partido')}",
-            f"Cargo: {candidato.get('Cargo')}",
-            f"Reeleição: {candidato.get('Reeleição')}",
-            f"Cidade/UF: {candidato.get('Código do Município')}"
-        ]
-
-        # Draw text below the image
-        y_text = 240
-        for line in texto:
-            draw.text((30, y_text), line, font=self.font, fill="black")
-            y_text += 30
-
-        tarjeta.save(output_path)
+            self.logger.error(f"Erro ao gerar PNG: {e}")
+            raise
 
     def _gerar_tarjeta_svg(self, candidato, output_path):
         """Gera versão SVG da tarjeta (preparação para CorelDraw)"""

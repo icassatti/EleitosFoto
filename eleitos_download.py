@@ -4,6 +4,10 @@ import json
 import os
 from picwish import PicWishProcessor
 from geradortarget import process_candidates
+from log_config import setup_logger
+
+# Configuração do logger
+logger = setup_logger('eleitos_download', os.path.join(os.path.dirname(__file__), 'eleitos_download.log'))
 
 # Códigos dos cargos
 CARGOS = {
@@ -13,6 +17,7 @@ CARGOS = {
 }
 
 def obter_id_eleicao(ano, tipo):
+    logger.info(f"Buscando ID da eleição: ano={ano}, tipo={tipo}")
     tipo = tipo.lower()
     abrangencia = "M" if tipo == "municipal" else "F"
     url = "https://divulgacandcontas.tse.jus.br/divulga/rest/v1/ata/ordinarias"
@@ -24,7 +29,7 @@ def obter_id_eleicao(ano, tipo):
             if str(eleicao.get("ano")) == str(ano) and eleicao.get("tipoAbrangencia") == abrangencia:
                 return eleicao.get("id")
     except requests.RequestException as e:
-        print(f"Erro ao acessar o endpoint de eleições: {e}")
+        logger.error(f"Erro ao acessar o endpoint de eleições: {e}")
     return None
 
 def obter_ufs_por_regiao(id_eleicao):
@@ -45,7 +50,7 @@ def obter_ufs_por_regiao(id_eleicao):
                 regioes[regiao].append({"sigla": sigla, "nome": nome})
         return regioes
     except requests.RequestException as e:
-        print(f"Erro ao acessar dados da eleição atual: {e}")
+        logger.error(f"Erro ao acessar dados da eleição atual: {e}")
     return {}
 
 def buscar_codigo_municipio(uf, id_eleicao, nome_municipio):
@@ -57,7 +62,7 @@ def buscar_codigo_municipio(uf, id_eleicao, nome_municipio):
         
         # Handle case where municipios is a string
         if isinstance(municipios, str):
-            print(f"Resposta inesperada do servidor: {municipios}")
+            logger.warning(f"Resposta inesperada do servidor: {municipios}")
             return None
             
         # Handle case where municipios is a dict with nested data
@@ -68,13 +73,13 @@ def buscar_codigo_municipio(uf, id_eleicao, nome_municipio):
             if isinstance(municipio, dict) and municipio.get("nome", "").strip().lower() == nome_municipio.strip().lower():
                 return municipio.get("codigo")
         
-        print(f"Município '{nome_municipio}' não encontrado em {uf}")
+        logger.info(f"Município '{nome_municipio}' não encontrado em {uf}")
         return None
     except requests.RequestException as e:
-        print(f"Erro ao buscar municípios: {e}")
+        logger.error(f"Erro ao buscar municípios: {e}")
         return None
     except (KeyError, TypeError) as e:
-        print(f"Erro ao processar dados dos municípios: {e}")
+        logger.error(f"Erro ao processar dados dos municípios: {e}")
         return None
 
 def obter_candidatos_eleitos(id_eleicao, codigo_municipio, codigo_cargo):
@@ -101,9 +106,10 @@ def obter_candidatos_eleitos(id_eleicao, codigo_municipio, codigo_cargo):
                     "Reeleição": "Sim" if candidato.get("st_REELEICAO") else "Não",
                     "Imagem Oficial": imagem_url
                 })
+        logger.info(f"Encontrados {len(eleitos)} candidatos eleitos para o cargo {codigo_cargo}")
         return eleitos
     except requests.RequestException as e:
-        print(f"Erro ao acessar candidatos do cargo {codigo_cargo}: {e}")
+        logger.error(f"Erro ao acessar candidatos do cargo {codigo_cargo}: {e}")
     return []
 
 def criar_estrutura_diretorios(regiao, uf, municipio):
@@ -121,6 +127,7 @@ def criar_estrutura_diretorios(regiao, uf, municipio):
     # Cria os diretórios se não existirem
     os.makedirs(caminho_completo, exist_ok=True)
     
+    logger.info(f"Caminho da pasta criado: {caminho_completo}")
     return caminho_completo
 
 def exportar_para_csv_json(dados, uf, municipio, regiao):
@@ -144,9 +151,9 @@ def exportar_para_csv_json(dados, uf, municipio, regiao):
         with open(caminho_json, mode="w", encoding="utf-8") as jsonfile:
             json.dump(dados, jsonfile, ensure_ascii=False, indent=2)
             
-        print(f"Dados exportados para:\n{caminho_csv}\n{caminho_json}")
+        logger.info(f"Dados exportados para:\n{caminho_csv}\n{caminho_json}")
     except Exception as e:
-        print(f"Erro ao exportar arquivos: {e}")
+        logger.error(f"Erro ao exportar arquivos: {e}")
 
 def carregar_config():
     """Carrega configurações do arquivo config.json"""
@@ -157,14 +164,14 @@ def carregar_config():
         with open(config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except FileNotFoundError:
-        print(f"\nERRO: Arquivo de configuração não encontrado!")
-        print(f"1. Copie o arquivo {template_path}")
-        print(f"2. Renomeie para config.json")
-        print(f"3. Atualize a chave 'picwish_api_key' com sua API key do PicWish")
+        logger.error(f"Arquivo de configuração não encontrado!")
+        logger.info(f"1. Copie o arquivo {template_path}")
+        logger.info(f"2. Renomeie para config.json")
+        logger.info(f"3. Atualize a chave 'picwish_api_key' com sua API key do PicWish")
         exit(1)
 
 def obter_parametros():
-    """Obtém os parâmetros de execução via input do usuário"""
+    logger.info("Obtendo parâmetros de execução")
     config = carregar_config()
     
     print("\n=== Configuração da Coleta de Dados ===")
@@ -205,10 +212,12 @@ def obter_parametros():
     gerar_tarjetas = input("Deseja gerar tarjetas? (s/N): ").strip().lower() == 's'
     params['gerar_tarjetas'] = gerar_tarjetas
     
+    logger.info(f"Parâmetros obtidos: {params}")
     return params
 
 # === Fluxo principal com variáveis fixas ===
 if __name__ == "__main__":
+    logger.info("Iniciando processo de download de eleitos")
     # Obter parâmetros via input
     params = obter_parametros()
     
@@ -250,10 +259,10 @@ if __name__ == "__main__":
                     if params['gerar_tarjetas']:
                         process_candidates(todos_eleitos, True)
                 else:
-                    print("Nenhum candidato eleito encontrado.")
+                    logger.info("Nenhum candidato eleito encontrado.")
             else:
-                print("Município não encontrado.")
+                logger.info("Município não encontrado.")
         else:
-            print("UF não encontrada na região selecionada.")
+            logger.info("UF não encontrada na região selecionada.")
     else:
-        print("Eleição não encontrada.")
+        logger.info("Eleição não encontrada.")

@@ -3,6 +3,7 @@ import time
 import requests
 import os
 from urllib.parse import urlparse
+from log_config import setup_logger
 
 def carregar_config():
     """Carrega configurações do arquivo config.json"""
@@ -12,32 +13,35 @@ def carregar_config():
 
 class PicWishProcessor:
     def __init__(self, api_key=None):
-        """Inicializa o processador com a API key do config ou fornecida"""
+        self.logger = setup_logger('PicWishProcessor', os.path.join(os.path.dirname(__file__), 'picwish_processor.log'))
+        self.logger.info("Iniciando PicWishProcessor")
+        
         if api_key is None:
             config = carregar_config()
             api_key = config.get('picwish_api_key')
-        # Add debug print    
-        print(f"\nInicializando PicWishProcessor com API Key: {api_key}")
+        self.logger.info(f"API Key configurada: {api_key[:4]}..." if api_key else "API Key não configurada")
         self.api_key = api_key
         
     def download_image(self, url, save_path):
         """Download da imagem original"""
         try:
+            self.logger.info(f"Baixando imagem de {url}")
             response = requests.get(url)
             response.raise_for_status()
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             with open(save_path, 'wb') as f:
                 f.write(response.content)
+            self.logger.info(f"Imagem salva em {save_path}")
             return True
         except Exception as e:
-            print(f"Erro ao baixar imagem: {e}")
+            self.logger.error(f"Erro ao baixar imagem: {e}")
             return False
 
     def process_image_with_picwish(self, image_url):
         """Processa a imagem usando a API PicWish"""
         if not self.api_key:
-            print("\nERRO: API Key não configurada!")
-            print("Configure uma API Key válida no arquivo config.json")
+            self.logger.error("API Key não configurada!")
+            self.logger.info("Configure uma API Key válida no arquivo config.json")
             return None
 
         headers = {'X-API-KEY': self.api_key}
@@ -45,32 +49,32 @@ class PicWishProcessor:
         url = 'https://techhk.aoscdn.com/api/tasks/visual/scale'
 
         try:
-            print(f"\nEnviando requisição para PicWish API...")
+            self.logger.info(f"Enviando requisição para PicWish API...")
             response = requests.post(url, headers=headers, data=data)
             response_json = response.json()
-            print(f"Status da requisição: {response.status_code}")
+            self.logger.info(f"Status da requisição: {response.status_code}")
             
             if response.status_code == 401:
-                print("\nERRO: API Key inválida ou expirada!")
-                print("1. Acesse https://picwish.com/my-account?subRoute=api-key")
-                print("2. Copie sua API key válida")
-                print("3. Atualize o arquivo config.json")
-                print("4. Execute o programa novamente")
+                self.logger.error("API Key inválida ou expirada!")
+                self.logger.info("1. Acesse https://picwish.com/my-account?subRoute=api-key")
+                self.logger.info("2. Copie sua API key válida")
+                self.logger.info("3. Atualize o arquivo config.json")
+                self.logger.info("4. Execute o programa novamente")
                 return None
                 
-            print(f"Resposta completa: {response_json}")
+            self.logger.debug(f"Resposta completa: {response_json}")
             
             if response_json.get('status') == 200 and 'data' in response_json:
                 task_id = response_json['data'].get('task_id')
                 if task_id:
-                    print(f"Task ID obtido: {task_id}")
+                    self.logger.info(f"Task ID obtido: {task_id}")
                     return task_id
                 else:
-                    print("Task ID não encontrado na resposta")
+                    self.logger.warning("Task ID não encontrado na resposta")
             else:
-                print(f"Erro na resposta: {response_json.get('message', 'Sem mensagem de erro')}")
+                self.logger.error(f"Erro na resposta: {response_json.get('message', 'Sem mensagem de erro')}")
         except Exception as e:
-            print(f"Erro ao processar imagem: {e}")
+            self.logger.error(f"Erro ao processar imagem: {e}")
         return None
 
     def get_processed_image(self, task_id, timeout=30):
@@ -78,39 +82,39 @@ class PicWishProcessor:
         headers = {'X-API-KEY': self.api_key}
         url = f'https://techhk.aoscdn.com/api/tasks/visual/scale/{task_id}'
         
-        print(f"\nIniciando polling para task_id: {task_id}")
+        self.logger.info(f"Iniciando polling para task_id: {task_id}")
         for i in range(timeout):
             if i > 0:
-                print(f"Tentativa {i+1} de {timeout}")
+                self.logger.info(f"Tentativa {i+1} de {timeout}")
                 time.sleep(1)
             try:
                 response = requests.get(url, headers=headers)
                 data = response.json()
-                print(f"Status da resposta: {response.status_code}")
+                self.logger.info(f"Status da resposta: {response.status_code}")
                 
                 if data.get('status') == 200 and 'data' in data:
                     task_data = data['data']
                     state = task_data.get('state')
                     state_detail = task_data.get('state_detail', '')
-                    print(f"Estado da tarefa: {state}")
-                    print(f"Detalhe do estado: {state_detail}")
+                    self.logger.info(f"Estado da tarefa: {state}")
+                    self.logger.info(f"Detalhe do estado: {state_detail}")
                     
                     # Verifica se o processamento está completo
                     if state == 1 and 'image' in task_data:  # Removido state_detail == 'Complete'
                         processed_url = task_data['image']
-                        print(f"URL da imagem processada: {processed_url}")
+                        self.logger.info(f"URL da imagem processada: {processed_url}")
                         return processed_url
                     elif state < 0:
-                        print(f"Erro no processamento: {data}")
+                        self.logger.error(f"Erro no processamento: {data}")
                         break
                     elif state == 2:  # Estado "Preparing"
-                        print("Preparando o processamento...")
+                        self.logger.info("Preparando o processamento...")
                     else:
-                        print("Processamento ainda em andamento...")
+                        self.logger.info("Processamento ainda em andamento...")
             except Exception as e:
-                print(f"Erro ao obter resultado: {e}")
+                self.logger.error(f"Erro ao obter resultado: {e}")
                 break
-        print("Timeout ou erro ao aguardar processamento")
+        self.logger.warning("Timeout ou erro ao aguardar processamento")
         return None
 
     def process_remove_background(self, image_url):
@@ -120,23 +124,23 @@ class PicWishProcessor:
         url = 'https://techhk.aoscdn.com/api/tasks/visual/segmentation'
 
         try:
-            print(f"\nEnviando requisição para remover fundo...")
+            self.logger.info(f"Enviando requisição para remover fundo...")
             response = requests.post(url, headers=headers, data=data)
             response_json = response.json()
-            print(f"Status da requisição: {response.status_code}")
-            print(f"Resposta completa: {response_json}")
+            self.logger.info(f"Status da requisição: {response.status_code}")
+            self.logger.debug(f"Resposta completa: {response_json}")
             
             if response_json.get('status') == 200 and 'data' in response_json:
                 task_id = response_json['data'].get('task_id')
                 if task_id:
-                    print(f"Task ID obtido para remoção de fundo: {task_id}")
+                    self.logger.info(f"Task ID obtido para remoção de fundo: {task_id}")
                     return task_id
                 else:
-                    print("Task ID não encontrado na resposta")
+                    self.logger.warning("Task ID não encontrado na resposta")
             else:
-                print(f"Erro na resposta: {response_json.get('message', 'Sem mensagem de erro')}")
+                self.logger.error(f"Erro na resposta: {response_json.get('message', 'Sem mensagem de erro')}")
         except Exception as e:
-            print(f"Erro ao processar remoção de fundo: {e}")
+            self.logger.error(f"Erro ao processar remoção de fundo: {e}")
         return None
 
     def get_background_removed_image(self, task_id, timeout=30):
@@ -144,10 +148,10 @@ class PicWishProcessor:
         headers = {'X-API-KEY': self.api_key}
         url = f'https://techhk.aoscdn.com/api/tasks/visual/segmentation/{task_id}'
         
-        print(f"\nIniciando polling para remoção de fundo task_id: {task_id}")
+        self.logger.info(f"Iniciando polling para remoção de fundo task_id: {task_id}")
         for i in range(timeout):
             if i > 0:
-                print(f"Tentativa {i+1} de {timeout}")
+                self.logger.info(f"Tentativa {i+1} de {timeout}")
                 time.sleep(1)
             try:
                 response = requests.get(url, headers=headers)
@@ -156,21 +160,21 @@ class PicWishProcessor:
                 if data.get('status') == 200 and 'data' in data:
                     task_data = data['data']
                     state = task_data.get('state')
-                    print(f"Estado da tarefa: {state}")
+                    self.logger.info(f"Estado da tarefa: {state}")
                     
                     if state == 1 and 'image' in task_data:
                         processed_url = task_data['image']
-                        print(f"URL da imagem sem fundo: {processed_url}")
+                        self.logger.info(f"URL da imagem sem fundo: {processed_url}")
                         return processed_url
                     elif state < 0:
-                        print(f"Erro no processamento: {data}")
+                        self.logger.error(f"Erro no processamento: {data}")
                         break
                     else:
-                        print("Processamento ainda em andamento...")
+                        self.logger.info("Processamento ainda em andamento...")
             except Exception as e:
-                print(f"Erro ao obter resultado: {e}")
+                self.logger.error(f"Erro ao obter resultado: {e}")
                 break
-        print("Timeout ou erro ao aguardar processamento")
+        self.logger.warning("Timeout ou erro ao aguardar processamento")
         return None
 
     def process_id_photo(self, image_url):
@@ -180,19 +184,19 @@ class PicWishProcessor:
         url = 'https://techhk.aoscdn.com/api/tasks/visual/idphoto'
 
         try:
-            print(f"\nEnviando requisição para formato 3x4...")
+            self.logger.info(f"Enviando requisição para formato 3x4...")
             response = requests.post(url, headers=headers, data=data)
             response_json = response.json()
-            print(f"Status da requisição: {response.status_code}")
-            print(f"Resposta completa: {response_json}")
+            self.logger.info(f"Status da requisição: {response.status_code}")
+            self.logger.debug(f"Resposta completa: {response_json}")
             
             if response_json.get('status') == 200 and 'data' in response_json:
                 task_id = response_json['data'].get('task_id')
                 if task_id:
-                    print(f"Task ID obtido para foto 3x4: {task_id}")
+                    self.logger.info(f"Task ID obtido para foto 3x4: {task_id}")
                     return task_id
         except Exception as e:
-            print(f"Erro ao processar foto 3x4: {e}")
+            self.logger.error(f"Erro ao processar foto 3x4: {e}")
         return None
 
     def get_id_photo_result(self, task_id, timeout=30):
@@ -214,10 +218,10 @@ class PicWishProcessor:
                     if state == 1 and 'image' in task_data:
                         return task_data['image']
                     elif state < 0:
-                        print(f"Erro no processamento 3x4: {data}")
+                        self.logger.error(f"Erro no processamento 3x4: {data}")
                         break
             except Exception as e:
-                print(f"Erro ao obter resultado 3x4: {e}")
+                self.logger.error(f"Erro ao obter resultado 3x4: {e}")
                 break
         return None
 
@@ -246,9 +250,8 @@ class PicWishProcessor:
         cargo = candidate_data['Cargo']
         url_original = candidate_data['Imagem Oficial']
         
-        print(f"\n{'='*50}")
-        print(f"Processando candidato: {nome}")
-        print(f"URL original: {url_original}")
+        self.logger.info(f"Processando candidato: {nome}")
+        self.logger.info(f"URL original: {url_original}")
         
         # Criar estrutura de pastas
         images_dir = os.path.join(base_dir, 'imagens')
@@ -263,10 +266,10 @@ class PicWishProcessor:
         # Baixar imagem original primeiro
         original_path = os.path.join(cargo_dir, f"{nome}.jpg")
         if not self.download_image(url_original, original_path):
-            print(f"Falha ao baixar imagem original para {nome}")
+            self.logger.warning(f"Falha ao baixar imagem original para {nome}")
             return False
 
-        print(f"Imagem original salva em: {original_path}")
+        self.logger.info(f"Imagem original salva em: {original_path}")
         
         # Processar imagem
         current_url = url_original
@@ -300,12 +303,12 @@ class PicWishProcessor:
             filename = self.get_processed_filename(nome, remove_background, make_id_photo)
             processed_path = os.path.join(processed_cargo_dir, filename)
             if self.download_image(current_url, processed_path):
-                print(f"Imagem processada salva em: {processed_path}")
+                self.logger.info(f"Imagem processada salva em: {processed_path}")
                 return True
             else:
-                print(f"Falha ao salvar imagem processada para {nome}")
+                self.logger.warning(f"Falha ao salvar imagem processada para {nome}")
         else:
-            print(f"Nenhum processamento foi concluído com sucesso para {nome}")
+            self.logger.info(f"Nenhum processamento foi concluído com sucesso para {nome}")
         
         return False
 
@@ -345,7 +348,7 @@ class PicWishProcessor:
             success = self.download_image(url_original, original_path)
             
             if success:
-                print(f"Imagem de {nome} salva em: {original_path}")
+                self.logger.info(f"Imagem de {nome} salva em: {original_path}")
             
             results.append({
                 'nome': candidate['Nome de Urna'],
