@@ -5,6 +5,7 @@ from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import svgwrite
 from svgwrite import cm, mm
+from corelmanager import CorelDrawManager
 
 class TarjetaGenerator:
     def __init__(self, output_dir="tarjetas"):
@@ -133,7 +134,17 @@ def process_candidates(candidatos_data, gerar_tarjetas=False):
     """Função para ser chamada do eleitos_download.py"""
     if not gerar_tarjetas:
         return
+    
+    try:
+        corel = CorelDrawManager()
+        output_dir = "tarjetas"
+        os.makedirs(output_dir, exist_ok=True)
         
-    generator = TarjetaGenerator()
-    generator.gerar_arquivo_corel(candidatos_data)
+        # Gerar arquivo CDR
+        output_path = os.path.join(output_dir, "tarjetas_eleitos.cdr")
+        corel.create_template(candidatos_data, output_path)
+        print(f"Arquivo CorelDraw gerado em: {output_path}")
+        
+    finally:
+        corel.quit()
 
